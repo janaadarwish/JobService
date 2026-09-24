@@ -1,136 +1,76 @@
-# JobService — Final Backend Project
+# Close Job API - Hangfire Recurring Jobs
 
-A small interview-ready ASP.NET Core backend that combines:
+A small ASP.NET Core Web API demonstrating a real Hangfire recurring task.
 
-- Clean Architecture
-- CQRS-style request/handler separation
-- REST API + Swagger
-- Hangfire recurring jobs
-- A practical recurring task: automatically close jobs older than 7 days
-- Git workflow and engineering documentation
+## Recurring task
 
-## Project idea
+The application automatically closes jobs that have remained open for more than 7 days.
 
-**Job Service** manages simple jobs.
+The recurring job is registered with:
 
-A job starts as `Open`. The system exposes an API for creating, listing, and closing jobs. A Hangfire recurring job runs every day and automatically closes jobs that have been open for more than 7 days.
+`RecurringJob.AddOrUpdate<AutoCloseJobsJob>("auto-close-stale-jobs", job => job.ExecuteAsync(), "*/5 * * * *", ...)`
 
-The project intentionally stays small so the architecture is easy to explain in an interview.
+The Cron expression `*/5 * * * *` means the job is scheduled every 5 minutes.
 
-## Architecture
+Hangfire checks recurring jobs on a minute-based interval, then enqueues the matching background job for processing.
 
-```text
-JobService.Api
-    |
-    +--> JobService.Application
-    |       |
-    |       +--> Commands
-    |       +--> Queries
-    |       +--> Abstractions
-    |
-    +--> JobService.Infrastructure
-            |
-            +--> Repository
-            +--> Hangfire recurring job
+## Project structure
 
-JobService.Domain
-    |
-    +--> Job entity
-    +--> JobStatus
-```
-
-### Clean Architecture responsibilities
-
-- **Domain:** business entity and rules.
-- **Application:** use cases, CQRS requests/handlers, repository abstraction.
-- **Infrastructure:** repository implementation and Hangfire job.
-- **API:** HTTP endpoints, Swagger, dependency injection, Hangfire dashboard.
-
-## CQRS
-
-The application separates reads and writes:
-
-- `GetJobsQuery` → read all jobs.
-- `CreateJobCommand` → create a job.
-- `CloseJobCommand` → close a job.
-
-A full event-sourcing system is unnecessary for this small service, so CQRS is intentionally lightweight.
-
-## Hangfire
-
-Dashboard:
-
-`http://localhost:5000/hangfire`
-
-Swagger:
-
-`http://localhost:5000/swagger`
-
-Recurring job:
-
-`auto-close-old-jobs`
-
-Schedule:
-
-`Cron.Daily`
-
-The job finds open jobs older than seven days and closes them.
+- `Models/Job.cs` contains the job model and status.
+- `Repositories/IJobRepository.cs` defines the repository contract.
+- `Repositories/InMemoryJobRepository.cs` stores sample jobs in memory.
+- `Services/JobService.cs` contains the auto-close business rule.
+- `Jobs/AutoCloseJobsJob.cs` is the Hangfire background job.
+- `Program.cs` configures Hangfire, the dashboard, the recurring schedule, and API endpoints.
 
 ## Run
 
-Requirements:
-
-- .NET 8 SDK
-
-From the repository root:
+Install .NET 8 SDK, then run:
 
 ```bash
 dotnet restore
-dotnet run --project src/JobService.Api
+dotnet run --project src/CloseJobHangfire
 ```
 
-Then open:
+Open:
 
-- Swagger: http://localhost:5000/swagger
-- Hangfire: http://localhost:5000/hangfire
-- Health: http://localhost:5000/health
+- API: `http://localhost:5000`
+- Hangfire Dashboard: `http://localhost:5000/hangfire`
+
+The exact port may be shown by the ASP.NET Core console output.
+
+## Verify the recurring job
+
+1. Start the application.
+2. Open `/hangfire`.
+3. Select **Recurring Jobs**.
+4. Find `auto-close-stale-jobs`.
+5. The schedule should show every 5 minutes.
+6. The seeded job `Prepare interview questions` is older than 7 days, so the recurring task will close it on its next execution.
+
+You can also use the Dashboard's manual trigger for `auto-close-stale-jobs` to demonstrate the task immediately.
 
 ## API examples
 
-### Create
+Get all jobs:
 
-```http
-POST /api/jobs
-Content-Type: application/json
+`GET /api/jobs`
 
+Get one job:
+
+`GET /api/jobs/1`
+
+Create a job:
+
+`POST /api/jobs`
+
+```json
 {
-  "title": "Review candidate applications"
+  "title": "Create a new backend feature"
 }
 ```
 
-### List
+## Packages
 
-```http
-GET /api/jobs
-```
-
-### Close
-
-```http
-POST /api/jobs/{id}/close
-```
-
-## Important note
-
-This final-project version uses Hangfire MemoryStorage and an in-memory repository to keep setup simple. In a production deployment, the repository and Hangfire storage should use persistent infrastructure such as PostgreSQL or SQL Server.
-
-## Definition of Done
-
-- API starts successfully.
-- Swagger exposes the endpoints.
-- Jobs can be created and listed.
-- Jobs can be closed.
-- Hangfire dashboard is available.
-- Recurring job appears in Hangfire's Recurring Jobs section.
-- Architecture and workflow are documented.
-- No secrets are committed.
+- Hangfire.AspNetCore 1.8.25
+- Hangfire.MemoryStorage 1.8.1.2
